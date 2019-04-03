@@ -1,8 +1,8 @@
 const inputs = document.querySelectorAll("input");
 const primaryDisplay = document.querySelector("h1");
-let secondaryDisplay = document.querySelector("h2");
+let expressionDisplay = document.querySelector("h2");
 let timer = 0;
-let lastOpWasEquals = false;
+let lastKeyWasEquals = false;
 
 // When user clicks button, depress button & send its input to be parsed
 inputs.forEach(function(button) {
@@ -12,24 +12,24 @@ inputs.forEach(function(button) {
   }
 })
 
-// Clicks anywhere bubbles to doc, and all depressed buttons are undepressed
+// Releasing mouse button anywhere bubbles to doc: inset buttons are outset
 document.onmouseup = function() {
   inputs.forEach(function(button) {
     button.classList.remove("inset");
   })
 }
 
-// Pressing keyboard key sends its value to be parsed every 0.4 seconds
+// Pressing keyboard key sends its value to be parsed every 0.5 seconds
 document.onkeydown = function(event) {
   // Prevent baskspace from navigating back in browser history
-  if(event.key == "Backspace")
+  if (event.key == "Backspace")
   {
     event.preventDefault();
   }
-  timer = setInterval(parseInput(event.key, true), 3000);
+  timer = setInterval(parseInput(event.key, true), 500);
 }
 
-// Releasing keyboard button stops it from sending its value for parsing
+// Release keyboard button to stop it sending its value for parsing
 document.onkeyup = function() {
   clearInterval(timer);
   inputs.forEach(function(button) {
@@ -37,46 +37,48 @@ document.onkeyup = function() {
   })
 }
 
-// Converts synonymous keyboard symbols and sends input to relevant function
+// Check entry; simulate button press if input keyed; pass to relevant function
 function parseInput(char, keyboard)
 {
+  // Convert keyboard symbols synonymous to displayed symbols
   switch(char)
   {
     case "%":
-      char = "/";
+      char = "\xF7";
       showOnKeypad(char);
       operator(char);
       return;
-    case "x":
+    case "*":
     case "X":
-      char = "*";
+      char = "x";
       showOnKeypad(char);
       operator(char);
       return;
   }
-
-  if(/[\d\.]/.test(char))
+  // Digits and decimal points
+  if (/[\d\.]/.test(char))
   {
-    if(keyboard)
+    if (keyboard)
     {
       showOnKeypad(char);
     }
     digit(char);
   }
-  else if(/[\+\-\*\/]/.test(char)) 
+  // Operators other than '='
+  else if (/(\xF7|[\+\-x])/u.test(char)) 
   {
-    if(keyboard)
+    if (keyboard)
     {
       showOnKeypad(char);
     }
     operator(char);
   }
-
+  // Look for all other inputs
   switch(char)
   {
     case "=":
     case "Enter":
-      if(keyboard)
+      if (keyboard)
       {
         showOnKeypad("=");
       }
@@ -84,7 +86,7 @@ function parseInput(char, keyboard)
     break;
     case "Delete":
     case "Backspace":
-      if(keyboard)
+      if (keyboard)
       {
         showOnKeypad("Delete");
       }
@@ -92,7 +94,7 @@ function parseInput(char, keyboard)
       break;
     case "c":
     case "C":
-      if(keyboard)
+      if (keyboard)
       {
         showOnKeypad("C");
       }
@@ -103,22 +105,25 @@ function parseInput(char, keyboard)
       break
     default:
       return;
-      break;
   }
 }
 
-/* Move current input into secondary display (adding one if neccessary)
-and reset primary display */
+// Move current input into expression display (above the primary display)
 function operator(op)
 {
-  if(lastOpWasEquals)
+  /* If previous key pressed was '=', user wants to use the output as an 
+  operand. For UX, wrap previous expression in brackets first (the '=' will be
+  removed later). */
+  if (lastKeyWasEquals)
   {
-    secondaryDisplay.textContent = "(" + secondaryDisplay.textContent.replace(/(?== $)/, ") ");
+    expressionDisplay.textContent = "(" + 
+      expressionDisplay.textContent.replace(/(?== $)/, ") ");
     primaryDisplay.textContent = "0";
-    lastOpWasEquals = false;
+    lastKeyWasEquals = false;
   }
   let display = primaryDisplay.textContent;
-  let displayTwo = secondaryDisplay.textContent;
+  let displayTwo = expressionDisplay.textContent;
+  // To simplify expression display, remove any trailing decimal points/zeroes
   if (/\./.test(display))
   {
     while (display.substring(display.length - 1) == "0")
@@ -130,75 +135,59 @@ function operator(op)
       display = display.substring(0, display.length - 1);
     }
   }
+  // Append input number, then operation symbol to expression; pad with spaces
   if (display !== "0")
   {
-    secondaryDisplay.textContent += display + " " + op + " "; 
+    expressionDisplay.textContent += display + " " + op + " "; 
   }
-  else if(displayTwo)
+  // If user didn't input number, let them change previously entered operator
+  else if (displayTwo)
   {
-    secondaryDisplay.textContent = displayTwo.replace(/[\+\-\*\/=] $/, op + " ");
+    expressionDisplay.textContent = displayTwo.replace(/(\xF7|[\+\-x=]) $/, op + " ");
   }
   primaryDisplay.textContent = "0";
 }
 
-// Add digit to end of primary display (replacing '0' if present)
+// Add digit to end of primary display (replace '0' if present)
 function digit(dig)
 {
-  if(lastOpWasEquals)
+  // Clear both displays if user returns expression & then inputs new number
+  if (lastKeyWasEquals)
   {
     allClear();
-    lastOpWasEquals = false;
+    lastKeyWasEquals = false;
   }
+  // Ignore additional decimal points & don't let inputs make display overflow
   let display = primaryDisplay.textContent;
-  if(dig === "." && /\./.test(display))
+  if (dig === "." && /\./.test(display) || display.length > 17)
   {
     return;
   }
-  if(display === "0")
-  {
-    if(dig === ".")
-    {
-      primaryDisplay.textContent += dig;
-    }
-    else
-    {
-      primaryDisplay.textContent = dig;
-    }
-  }
-  else if(display.length > 17)
-  {
-    return;
-  }
-  else
+  // Keep the zero in display if decimal point entered
+  else if (display !== "0" || display === "0" && dig === ".")
   {
     primaryDisplay.textContent += dig;
   }
-}
-
-/* Move input to secondary display; compute result of string now in secondary
-display and print it in primary display */
-function compute()
-{
-  operator("=");
-  // Last character is '='
-  let newCont = secondaryDisplay.textContent.replace(/[\s=]/g, "")
-  primaryDisplay.textContent = eval(newCont);
-  lastOpWasEquals = true;
+  // Otherwise replace the zero
+  else
+  {
+    primaryDisplay.textContent = dig;
+  }
 }
 
 // Delete one digit from end of primary display
 function backSpace()
 {
   let display = primaryDisplay.textContent;
-  if(lastOpWasEquals)
+  if (lastKeyWasEquals)
   {
     allClear();
-    lastOpWasEquals = false;
+    lastKeyWasEquals = false;
   }
-  if(display != 0)
+  if (display !== "0")
   {
     let len = display.length;
-    if(len === 1)
+    if (len === 1)
     {
       primaryDisplay.textContent = "0";
     }
@@ -215,11 +204,80 @@ function clear()
   primaryDisplay.textContent = "0";
 }
 
-// Remove secondary display and call clear
+// Remove expression display and call clear
 function allClear()
 {
-  secondaryDisplay.textContent = "";
+  expressionDisplay.textContent = "";
   clear();
+}
+
+/* Move input to expression display; compute result of string now in
+expression display and print it in primary display */
+function compute()
+{
+  operator("=");
+  // Last char is '='; remove it & all spaces, then send to evaluate; print
+  primaryDisplay.textContent = 
+    evaluate(expressionDisplay.textContent.replace(/[\s=]/g, ""));
+  // Set global flag in case user keeps calculating (used elsewhere)
+  lastKeyWasEquals = true;
+}
+
+// Do the maths
+function evaluate(exp)
+{
+  /* Do bracketed expressions first, recursively calling evaluate until 
+  replaced with single expression */
+  if (exp.substr(0,1) === "(")
+  {
+    let regex = /\((.*)\)/.exec(exp);
+    exp = exp.replace(regex[0], evaluate(regex[1]));
+  }
+  /* Next do multiplication and division in order encountered; simplify each
+  binary product/division to a number until only pluses and minuses remain */
+  let prodRgx = /(\d*)(\xF7|x)(\d*)/u;
+  for (let prodArr = prodRgx.exec(exp); prodArr; prodArr = prodRgx.exec(exp))
+  {
+    switch(prodArr[2])
+    {
+      case "x":
+      exp = exp.replace(prodArr[0], multiply(+prodArr[1], +prodArr[3]));
+      break;
+      case "\xF7":
+      exp = exp.replace(prodArr[0], divide(+prodArr[1], +prodArr[3]));
+      break;
+    }
+  }
+  /* Finally do addition and subtraction in order encountered; simplify each 
+  binary addition/subtraction to a number until only numbers remain */
+  let sumRgx = /(\d*)([\+\-])(\d*)/;
+  for (let sumArr = sumRgx.exec(exp); sumArr; sumArr = sumRgx.exec(exp))
+  {
+    switch(sumArr[2])
+    {
+      case "-":
+      sumArr[3] = -sumArr[3]
+      case "+":
+      exp = exp.replace(sumArr[0], add(+sumArr[1], +sumArr[3]));
+      break;
+    }
+  }
+  return exp;
+}
+
+function add(x,y)
+{
+  return x + y;
+}
+
+function multiply(x,y)
+{
+  return x * y;
+}
+
+function divide(x,y)
+{
+  return x / y;
 }
 
 // Inset calculator button corresponding to keyboard button
