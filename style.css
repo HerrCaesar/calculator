@@ -59,6 +59,11 @@
     border-style: inset;
 }
 
+.invisible
+{
+    visibility: hidden;
+}
+
 input
 {
     border: 4px outset lightgray;

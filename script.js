@@ -2,7 +2,17 @@ const inputs = document.querySelectorAll("input");
 const primaryDisplay = document.querySelector("h1");
 let expressionDisplay = document.querySelector("h2");
 let timer = 0;
+let blinking = 0;
 let lastKeyWasEquals = false;
+
+// Make cursor blink until user enters input
+makeBlink();
+function makeBlink()
+{
+  blinking = setInterval(function() {
+    primaryDisplay.classList.toggle("invisible")
+  }, 500)
+}
 
 // When user clicks button, depress button & send its input to be parsed
 inputs.forEach(function(button) {
@@ -112,13 +122,13 @@ function parseInput(char, keyboard)
 function operator(op)
 {
   /* If previous key pressed was '=', user wants to use the output as an 
-  operand. For UX, wrap previous expression in brackets first (the '=' will be
-  removed later). */
+  operand. For nicer UX, wrap previous expression in brackets first (the '='
+  will be removed later). */
   if (lastKeyWasEquals)
   {
     expressionDisplay.textContent = "(" + 
       expressionDisplay.textContent.replace(/(?== $)/, ") ");
-    primaryDisplay.textContent = "0";
+    primaryDisplay.textContent = "\u275A";
     lastKeyWasEquals = false;
   }
   let display = primaryDisplay.textContent;
@@ -136,7 +146,7 @@ function operator(op)
     }
   }
   // Append input number, then operation symbol to expression; pad with spaces
-  if (display !== "0")
+  if (!/\u{275A}/u.test(display))
   {
     expressionDisplay.textContent += display + " " + op + " "; 
   }
@@ -145,12 +155,16 @@ function operator(op)
   {
     expressionDisplay.textContent = displayTwo.replace(/(\xF7|[\+\-x=]) $/, op + " ");
   }
-  primaryDisplay.textContent = "0";
+  primaryDisplay.textContent = "\u275A";
+  makeBlink();
 }
 
 // Add digit to end of primary display (replace '0' if present)
 function digit(dig)
 {
+  // Make sure display isn't blinking
+  clearInterval(blinking);
+  primaryDisplay.classList.remove("invisible");
   // Clear both displays if user returns expression & then inputs new number
   if (lastKeyWasEquals)
   {
@@ -163,12 +177,17 @@ function digit(dig)
   {
     return;
   }
-  // Keep the zero in display if decimal point entered
-  else if (display !== "0" || display === "0" && dig === ".")
+  // If content already in display, add to it
+  else if (!/\u{275A}/u.test(display))
   {
     primaryDisplay.textContent += dig;
   }
-  // Otherwise replace the zero
+  // Put 0 to left of leading decimal point
+  else if (/\u{275A}/u.test(display) && dig === ".")
+  {
+    primaryDisplay.textContent = "0" + dig;
+  }
+  // Otherwise replace the curser |
   else
   {
     primaryDisplay.textContent = dig;
@@ -184,12 +203,13 @@ function backSpace()
     allClear();
     lastKeyWasEquals = false;
   }
-  if (display !== "0")
+  if (!/\u{275A}/u.test(display))
   {
     let len = display.length;
     if (len === 1)
     {
-      primaryDisplay.textContent = "0";
+      primaryDisplay.textContent = "\u275A";
+      makeBlink();
     }
     else
     {
@@ -201,7 +221,8 @@ function backSpace()
 // Replace primary display with '0'
 function clear()
 {
-  primaryDisplay.textContent = "0";
+  primaryDisplay.textContent = "\u275A";
+  makeBlink();
 }
 
 // Remove expression display and call clear
@@ -216,6 +237,9 @@ expression display and print it in primary display */
 function compute()
 {
   operator("=");
+  // Make sure display isn't blinking
+  clearInterval(blinking);
+  primaryDisplay.classList.remove("invisible");
   // Last char is '='; remove it & all spaces, then send to evaluate; print
   primaryDisplay.textContent = 
     evaluate(expressionDisplay.textContent.replace(/[\s=]/g, ""));
@@ -233,6 +257,11 @@ function evaluate(exp)
     let regex = /\((.*)\)/.exec(exp);
     exp = exp.replace(regex[0], evaluate(regex[1]));
   }
+  // Check for returning infinity from dividion by 0 inside bracket
+  if (exp.match("Infinity"))
+  {
+    return "Infinity";
+  }
   /* Next do multiplication and division in order encountered; simplify each
   binary product/division to a number until only pluses and minuses remain */
   let prodRgx = /(\d*)(\xF7|x)(\d*)/u;
@@ -246,6 +275,11 @@ function evaluate(exp)
       case "\xF7":
       exp = exp.replace(prodArr[0], divide(+prodArr[1], +prodArr[3]));
       break;
+    }
+    // If divided by 0
+    if (exp === "Infinity")
+    {
+      return exp;
     }
   }
   /* Finally do addition and subtraction in order encountered; simplify each 
@@ -277,6 +311,10 @@ function multiply(x,y)
 
 function divide(x,y)
 {
+  if (y === 0)
+  {
+    return "Infinity";
+  }
   return x / y;
 }
 
